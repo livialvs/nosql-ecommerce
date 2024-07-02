@@ -1,339 +1,22 @@
-import json
-from astrapy import DataAPIClient
+from neo4j import GraphDatabase
+import uuid
 
-# Initialize the client
-client = DataAPIClient("AstraCS:bjuyKIxnbzxkEDzxymZReYoY:1abf4483408b4dfc664dddbc5c1ad955ec15e4b4c08cd1e20d55557cc8da1425")
-db = client.get_database_by_api_endpoint(
-    "https://77851314-0af5-4590-8784-01b23081c901-us-east-2.apps.astra.datastax.com"
-)
+# Initialize the Neo4j driver
+uri = "neo4j+s://89dff8b3.databases.neo4j.io"
+username = "neo4j"
+password = "N8Htqbw46ntHASPyib15pCMVX7TS7xjm4DneoM7JudQ"
+driver = GraphDatabase.driver(uri, auth=(username, password))
 
-usuarioCol = db.get_collection("usuario")
-vendCol = db.get_collection("vendedor")
-prodCol = db.get_collection("produto")
-compCol = db.get_collection("compra")
-favCol = db.get_collection("favoritos")
-
-
-#CREATE de usuário, vendedor, produto e compra
+# CREATE
 
 def createUsuario():
-    mycolAstra = usuarioCol
-
     print("\nCreate - Usuário\n")
     nome = input("Nome: ")
     cpf = input("CPF: ")
     email = input("Email: ")
-    key = 'S'  
     enderecos = []
-    while (key.upper() != 'N'):
-        print("\nInserindo um novo endereço")
-        pais = input("País: ")
-        estado = input("Estado: ")
-        cidade = input("Cidade: ")
-        bairro = input("Bairro: ")
-        rua = input("Rua: ")
-        numero = input("Número: ")
-        endereco = {        
-            "pais": pais,
-            "estado": estado,
-            "cidade": cidade,
-            "bairro": bairro,
-            "rua": rua,
-            "numero": numero
-        }
-        enderecos.append(endereco) 
-        key = input("Deseja cadastrar um novo endereço (S/N)? ")
-    mydoc = { "nome": nome, "cpf": cpf, "endereco": enderecos, "email": email }
 
-    x = mycolAstra.insert_one(mydoc)
-    print("Documento inserido no Cassandra com ID ",x.inserted_id)
-
-
-def createVendedor():
-    mycolAstra = vendCol
-
-    print("\nCreate - Vendedor\n")
-    nome = input("Nome: ")
-    cpf = input("CPF: ")
-    email = input("Email: ")
-
-    mydoc = { "nome": nome, "cpf": cpf, "email": email }
-
-    x = mycolAstra.insert_one(mydoc)
-    print("Documento inserido no Cassandra com ID ",x.inserted_id)
-
-def findVendedor(vendedorCpf):
-    vendedor = vendCol.find_one({"cpf": vendedorCpf})
-    return vendedor
-
-
-def createProduto():
-    try:
-        mycolAstra = prodCol
-
-        print("\nCreate - Produto\n")
-        vendedorCpf = input("CPF do Vendedor: ")
-
-        vendedor = findVendedor(vendedorCpf)
-        if not vendedor:
-            print(f"Vendedor com CPF {vendedorCpf} não encontrado.")
-            return
-
-        nome = input("Nome: ")
-        preco = float(input("Preço: "))
-        quantidade = input("Quantidade: ")
-        status = input("Status: ")
-
-
-        mydoc = {
-            "nome": nome,
-            "preco": preco,
-            "quantidade": quantidade,
-            "status": status,
-            "vendedor": vendedorCpf
-        }
-
-        x = mycolAstra.insert_one(mydoc)
-        print("Documento inserido no Cassandra com ID ", x.inserted_id)
-
-    except ValueError as e:
-        print(f"Erro ao inserir produto: {e}")
-    except Exception as e:
-        print(f"Erro inesperado: {e}")
-
-
-def findUsuario(usuarioCpf):
-    usuario = usuarioCol.find_one({"cpf": usuarioCpf})
-    return usuario
-
-
-def createCompra():
-    mycol_compra = compCol
-    mycol_produto = prodCol
-    mycol_usuario = usuarioCol
-    mycol_vendedor = vendCol
-
-    print("\nCreate - Compra\n")
-
-    clienteCpf = input("CPF do Cliente: ")
-
-    cliente = findUsuario(clienteCpf)
-    if not cliente:
-        print(f"Usuário com CPF {clienteCpf} não encontrado.")
-        return
-    
-
-    print("\nProdutos disponíveis:")
-    for produto in mycol_produto.find():
-        print(f"ID: {produto['_id']}, Nome: {produto['nome']}, Preço: {produto['preco']}")
-
-    produtoId = input("ID do Produto: ")
-
-    produto = mycol_produto.find_one({"_id": produtoId})
-    if produto is None:
-        print("Produto não encontrado.")
-        return
-    
-    quantidade = int(input("Quantidade: "))
-    precoTotal = int(produto["preco"]) * quantidade
-
-    usuario = {
-        "cpf": cliente["cpf"],
-        "nome": cliente["nome"]
-    }
-
-    produtos = {
-        "id": produto["_id"],
-        "nome": produto["nome"],
-        "preco": produto["preco"],
-        "quantidade": quantidade
-    }
-
-    mydoc = {
-        "usuario": usuario,
-        "produtos": produtos,
-        "precoTotal": precoTotal,
-        "vendedor": produto["vendedor"]
-    }
-
-    x = mycol_compra.insert_one(mydoc)
-    print("Documento inserido com ID ", x.inserted_id)
-
-
-def createFavoritos():
-    mycol_favoritos = favCol
-    mycol_produto = prodCol
-    mycol_usuario = usuarioCol
-
-    print("\nCreate - Favoritos\n")
-
-    clienteCpf = input("CPF do Cliente: ")
-
-    cliente = findUsuario(clienteCpf)
-    if not cliente:
-        print(f"Usuário com CPF {clienteCpf} não encontrado.")
-        return
-    
-
-    print("\nProdutos disponíveis:")
-    for produto in mycol_produto.find():
-        print(f"ID: {produto['_id']}, Nome: {produto['nome']}, Preço: {produto['preco']}")
-
-    produtoId = input("ID do Produto: ")
-
-    produto = mycol_produto.find_one({"_id": produtoId})
-    if produto is None:
-        print("Produto não encontrado.")
-        return
-    
-    mydoc = {
-        "usuario": cliente["cpf"],
-        "produtoId": produto["_id"],
-        "produtoNome": produto["nome"],
-        "produtoPreco": produto["preco"]
-    }
-
-    x = mycol_favoritos.insert_one(mydoc)
-    print("Documento inserido com ID ", x.inserted_id)
-    
-
-
-#READ de usuário, vendedor, produto, compra e favoritos
-
-
-def readUsuario():
-    mycolAstra = usuarioCol
-
-    print("\nRead - Usuário\n")
-    for usuario in mycolAstra.find():
-        print(usuario)
-
-
-def readVendedor():
-    mycolAstra = vendCol
-
-    print("\nRead - Vendedor\n")
-    for vendedor in mycolAstra.find():
-        print(vendedor)
-
-
-def readProduto():
-    mycolAstra = prodCol
-
-    print("\nRead - Produto\n")
-    for produto in mycolAstra.find():
-        print(produto)
-
-
-def readCompra():
-    mycolAstra = compCol
-
-    print("\nRead - Compra\n")
-    for compra in mycolAstra.find():
-        print(compra)
-
-
-def readFavoritos():
-    mycolAstra = favCol
-    mycol_produto = prodCol
-
-    print("\nRead - Favoritos\n")
-    usuarioCpf = input("CPF do Usuário: ")
-    usuario = findUsuario(usuarioCpf)
-
-    if usuario:
-        favoritos = list(mycolAstra.find({"usuario": usuarioCpf}))
-        if favoritos:
-            print("Favoritos do usuário:")
-            for favorito in favoritos:
-                produto = mycol_produto.find_one({"id": favorito["produtoId"]})
-                if produto:
-                    print(f"ID: {produto['id']}, Nome: {produto['nome']}, Preço: {produto['preco']}")
-                else:
-                    print(f"Produto com ID {favorito['produtoId']} não encontrado.")
-        else:
-            print("Usuário não tem produtos favoritos.")
-    else:
-        print("Usuário não encontrado.")
-        
-
-#SEARCH de produto
-
-
-def searchProduto():
-    mycolAstra = prodCol
-
-    print("\nSearch - Produto\n")
-    produtoId = input("ID do Produto: ").strip()  # Remover espaços em branco
-
-    try:
-        produto = mycolAstra.find_one({"_id": produtoId})
-        if produto:
-            print(produto)
-        else:
-            print("Produto não encontrado.")
-    except Exception as e:
-        print(f"Erro ao buscar produto: {e}")
-
-#UPDATE de usuário
-
-
-def updateUsuario():
-    mycolAstra = usuarioCol
-
-    print("\nUpdate - Usuário\n")
-    cpf = input("CPF do Usuário: ")
-
-    # Verifique se o usuário existe
-    usuario = mycolAstra.find_one({"cpf": cpf})
-    if not usuario:
-        print("Usuário não encontrado.")
-        return
-
-    print("\nO que você deseja alterar?")
-    print("1 - Nome")
-    print("2 - Email")
-    print("3 - Endereço")
-    print("4 - Adicionar Endereço")
-    print("5 - Adicionar Favoritos")
-    choice = input("Escolha uma opção: ")
-
-    if choice == '1':
-        nome = input("Novo Nome: ")
-        mycolAstra.update_one({"cpf": cpf}, {"$set": {"nome": nome}})
-    elif choice == '2':
-        email = input("Novo Email: ")
-        mycolAstra.update_one({"cpf": cpf}, {"$set": {"email": email}})
-    elif choice == '3':
-        if 'endereco' in usuario and usuario['endereco']:
-            print("\nEndereços:")
-            for idx, endereco in enumerate(usuario['endereco']):
-                print(f"{idx + 1} - {endereco}")
-            endereco_idx = int(input("Qual endereço você deseja alterar? (Digite o número): ")) - 1
-            if 0 <= endereco_idx < len(usuario['endereco']):
-                print("\nInserindo um novo endereço")
-                pais = input("País: ")
-                estado = input("Estado: ")
-                cidade = input("Cidade: ")
-                bairro = input("Bairro: ")
-                rua = input("Rua: ")
-                numero = input("Número: ")
-                endereco = {
-                    "pais": pais,
-                    "estado": estado,
-                    "cidade": cidade,
-                    "bairro": bairro,
-                    "rua": rua,
-                    "numero": numero
-                }
-                usuario['endereco'][endereco_idx] = endereco
-                mycolAstra.update_one({"cpf": cpf}, {"$set": {"endereco": usuario['endereco']}})
-            else:
-                print("Número de endereço inválido.")
-        else:
-            print("Usuário não tem endereços cadastrados.")
-    elif choice == '4':
-        print("\nInserindo um novo endereço")
+    while True:
         pais = input("País: ")
         estado = input("Estado: ")
         cidade = input("Cidade: ")
@@ -348,34 +31,258 @@ def updateUsuario():
             "rua": rua,
             "numero": numero
         }
-        mycolAstra.update_one({"cpf": cpf}, {"$push": {"endereco": endereco}})
-    elif choice == '5':
-        print("\nAdicionando favoritos")
+        enderecos.append(endereco)
+        key = input("Deseja cadastrar um novo endereço (S/N)? ").upper()
+        if key != 'S':
+            break
+
+    with driver.session() as session:
+        session.run(
+            """
+            CREATE (u:Usuario {nome: $nome, cpf: $cpf, email: $email})
+            """,
+            nome=nome, cpf=cpf, email=email
+        )
+        
+        for endereco in enderecos:
+            session.run(
+                """
+                MATCH (u:Usuario {cpf: $cpf})
+                CREATE (e:Endereco {pais: $pais, estado: $estado, cidade: $cidade, bairro: $bairro, rua: $rua, numero: $numero})
+                CREATE (u)-[:RESIDE_EM]->(e)
+                """,
+                cpf=cpf, pais=endereco["pais"], estado=endereco["estado"], cidade=endereco["cidade"], 
+                bairro=endereco["bairro"], rua=endereco["rua"], numero=endereco["numero"]
+            )
+        print("Usuário criado com sucesso.")
+
+
+def createVendedor():
+    print("\nCreate - Vendedor\n")
+    nome = input("Nome: ")
+    cpf = input("CPF: ")
+    email = input("Email: ")
+
+    with driver.session() as session:
+        session.run(
+            """
+            CREATE (v:Vendedor {nome: $nome, cpf: $cpf, email: $email})
+            """,
+            nome=nome, cpf=cpf, email=email
+        )
+        print("Vendedor criado com sucesso.")
+
+
+def createProduto():
+    print("\nCreate - Produto\n")
+    nome = input("Nome: ")
+    preco = float(input("Preço: "))
+    vendedorCpf = input("CPF do Vendedor: ")
+
+    with driver.session() as session:
+        vendedor = session.run(
+            """
+            MATCH (v:Vendedor {cpf: $cpf}) RETURN v
+            """,
+            cpf=vendedorCpf
+        ).single()
+
+        if not vendedor:
+            print(f"Vendedor com CPF {vendedorCpf} não encontrado.")
+            return
+
+        session.run(
+            """
+            MATCH (v:Vendedor {cpf: $vendedorCpf})
+            CREATE (p:Produto {id: randomUUID(), nome: $nome, preco: $preco})-[:VENDIDO_POR]->(v)
+            """,
+            nome=nome, preco=preco, vendedorCpf=vendedorCpf
+        )
+        print("Produto criado com sucesso.")
+
+
+def createCompra():
+    print("\nCreate - Compra\n")
+    clienteCpf = input("CPF do Cliente: ")
+
+    with driver.session() as session:
+        cliente = session.run(
+            """
+            MATCH (u:Usuario {cpf: $cpf}) RETURN u
+            """,
+            cpf=clienteCpf
+        ).single()
+
+        if not cliente:
+            print(f"Usuário com CPF {clienteCpf} não encontrado.")
+            return
+
+        print("\nProdutos disponíveis:")
+        result = session.run("MATCH (p:Produto)-[:VENDIDO_POR]->(v:Vendedor) RETURN p.id AS id, p.nome AS nome, p.preco AS preco, v.nome AS vendedorNome, v.cpf AS vendedorCpf")
+        produtos = result.data()
+
+        if not produtos:
+            print("Nenhum produto disponível.")
+            return
+
+        for p in produtos:
+            print(f"ID: {p['id']}, Nome: {p['nome']}, Preço: {p['preco']}, Vendedor: {p['vendedorNome']} (CPF Vendedor: {p['vendedorCpf']})")
+
         produtoId = input("ID do Produto: ")
-        mycolAstra.update_one({"cpf": cpf}, {"$push": {"favoritos": produtoId}})
+        produto = next((p for p in produtos if p['id'] == produtoId), None)
+
+        if not produto:
+            print("Produto não encontrado.")
+            return
+
+        quantidade = int(input("Quantidade do Produto: "))
+        precoTotal = produto['preco'] * quantidade
+
+        session.run(
+            """
+            MATCH (u:Usuario {cpf: $clienteCpf})
+            MATCH (p:Produto {id: $produtoId})
+            CREATE (u)-[:COMPRA {quantidade: $quantidade, precoTotal: $precoTotal}]->(p)
+            """,
+            clienteCpf=clienteCpf, produtoId=produtoId, quantidade=quantidade, precoTotal=precoTotal
+        )
+
+        print(f"Compra realizada com sucesso!\nCliente: {cliente['u']['nome']}\nProduto: {produto['nome']}\nQuantidade: {quantidade}\nPreço Total: {precoTotal}\nVendedor: {produto['vendedorNome']} (CPF Vendedor: {produto['vendedorCpf']})")
 
 
-#DELETE de compra
+def createFavoritos():
+    print("\nCreate - Favoritos\n")
+    clienteCpf = input("CPF do Cliente: ")
+
+    with driver.session() as session:
+        cliente = session.run(
+            """
+            MATCH (u:Usuario {cpf: $cpf}) RETURN u
+            """,
+            cpf=clienteCpf
+        ).single()
+
+        if not cliente:
+            print(f"Usuário com CPF {clienteCpf} não encontrado.")
+            return
+
+        print("\nProdutos disponíveis:")
+        result = session.run("MATCH (p:Produto) RETURN p.id AS id, p.nome AS nome, p.preco AS preco")
+        produtos = result.data()
+
+        if not produtos:
+            print("Nenhum produto disponível.")
+            return
+
+        for p in produtos:
+            print(f"ID: {p['id']}, Nome: {p['nome']}, Preço: {p['preco']}")
+
+        produtoId = input("ID do Produto: ")
+        produto = next((p for p in produtos if p['id'] == produtoId), None)
+
+        if not produto:
+            print("Produto não encontrado.")
+            return
+
+        session.run(
+            """
+            MATCH (u:Usuario {cpf: $clienteCpf})
+            MATCH (p:Produto {id: $produtoId})
+            CREATE (u)-[:FAVORITA]->(p)
+            """,
+            clienteCpf=clienteCpf, produtoId=produtoId
+        )
+        print("Produto adicionado aos favoritos com sucesso.")
 
 
-def deleteCompra():
-    mycolAstra = compCol
+# READ
 
-    print("\nDelete - Compra\n")
 
-    compras = list(mycolAstra.find())
-    if not compras:
-        print("Nenhuma compra encontrada.")
-        return
+def readUsuario():
+    print("\nRead - Usuário\n")
+    with driver.session() as session:
+        usuarios = session.run("MATCH (u:Usuario) RETURN u").data()
+        for usuario in usuarios:
+            print(usuario['u'])
 
-    print("\nCompras disponíveis:")
-    for compra in compras:
-        print(f"ID: {compra['_id']}, Detalhes: {compra}")
 
-    compraId = input("\nDigite o ID da Compra que você deseja deletar: ")
-    result = mycolAstra.delete_one({"_id": compraId})
+def readVendedor():
+    print("\nRead - Vendedor\n")
+    with driver.session() as session:
+        vendedores = session.run("MATCH (v:Vendedor) RETURN v").data()
+        for vendedor in vendedores:
+            print(vendedor['v'])
 
-    if result.deleted_count > 0:
-        print("Compra deletada com sucesso.")
-    else:
-        print("ID da Compra não encontrado.")
+
+def readProduto():
+    print("\nRead - Produtos\n")
+
+    with driver.session() as session:
+        result = session.run(
+            """
+            MATCH (p:Produto)-[:VENDIDO_POR]->(v:Vendedor)
+            RETURN p.id AS id, p.nome AS nome, p.preco AS preco, v.nome AS vendedorNome, v.cpf AS vendedorCpf
+            """
+        )
+
+        produtos = result.data()
+        if produtos:
+            for produto in produtos:
+                print(f"ID: {produto['id']}")
+                print(f"Nome: {produto['nome']}")
+                print(f"Preço: {produto['preco']}")
+                print(f"Vendedor: {produto['vendedorNome']} (CPF: {produto['vendedorCpf']})\n")
+        else:
+            print("Nenhum produto encontrado.")
+
+
+def readCompra():
+    print("\nRead - Compras\n")
+
+    with driver.session() as session:
+        result = session.run(
+            """
+            MATCH (u:Usuario)-[c:COMPRA]->(p:Produto)-[:VENDIDO_POR]->(v:Vendedor)
+            RETURN u.nome AS clienteNome, u.cpf AS clienteCpf, p.nome AS produtoNome, c.quantidade AS quantidade, c.precoTotal AS precoTotal, v.nome AS vendedorNome, v.cpf AS vendedorCpf
+            """
+        )
+
+        compras = result.data()
+        if compras:
+            for compra in compras:
+                print(f"Cliente: {compra['clienteNome']} (CPF: {compra['clienteCpf']})")
+                print(f"Produto: {compra['produtoNome']}")
+                print(f"Quantidade: {compra['quantidade']}")
+                print(f"Preço Total: {compra['precoTotal']}")
+                print(f"Vendedor: {compra['vendedorNome']} (CPF: {compra['vendedorCpf']})\n")
+        else:
+            print("Nenhuma compra encontrada.")
+
+
+def readFavoritos():
+    print("\nRead - Favoritos\n")
+    usuarioCpf = input("CPF do Usuário: ")
+
+    with driver.session() as session:
+        usuario = session.run(
+            """
+            MATCH (u:Usuario {cpf: $cpf}) RETURN u
+            """,
+            cpf=usuarioCpf
+        ).single()
+
+        if usuario:
+            favoritos = session.run(
+                """
+                MATCH (u:Usuario {cpf: $cpf})-[:FAVORITA]->(p:Produto) RETURN p
+                """,
+                cpf=usuarioCpf
+            ).data()
+            if favoritos:
+                print("Favoritos do usuário:")
+                for favorito in favoritos:
+                    print(favorito['p'])
+            else:
+                print("Usuário não tem produtos favoritos.")
+        else:
+            print("Usuário não encontrado.")
